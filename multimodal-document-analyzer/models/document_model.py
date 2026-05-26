@@ -129,21 +129,17 @@ class DocumentAnalyzer:
         except Exception as e:
             return False, []
 
-    async def analyze_text_async(self) -> Dict[str, Any]:
+    def analyze_text(self) -> Dict[str, Any]:
         """
-        Perform comprehensive asynchronous text analysis on extracted text.
+        Perform comprehensive synchronous text analysis on extracted text.
 
         Returns:
             Dict: Analysis results including summary, keywords, entities, etc.
         """
-        import asyncio
-        loop = asyncio.get_event_loop()
-        
-        # Wrap blocking calls in run_in_executor
-        def _sync_analyze():
-            if not self.extracted_text:
-                return {'error': 'No text to analyze'}
+        if not self.extracted_text:
+            return {'error': 'No text to analyze'}
 
+        try:
             # Clean text
             cleaned_text = self.text_cleaner.clean_text(self.extracted_text)
 
@@ -184,11 +180,19 @@ class DocumentAnalyzer:
             }
 
             return self.analysis_results
-
-        try:
-            return await loop.run_in_executor(None, _sync_analyze)
         except Exception as e:
             return {'error': f"Error during analysis: {str(e)}"}
+
+    async def analyze_text_async(self) -> Dict[str, Any]:
+        """
+        Perform comprehensive asynchronous text analysis on extracted text.
+
+        Returns:
+            Dict: Analysis results including summary, keywords, entities, etc.
+        """
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.analyze_text)
 
     def answer_question(self, question: str) -> Dict[str, Any]:
         """

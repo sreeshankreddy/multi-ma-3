@@ -25,11 +25,27 @@ class DatabaseManager:
             db_path (str): Path to SQLite database file.
         """
         self.db_path = db_path
+        self._connection = None
+
+        # Use a persistent connection for in-memory databases
+        if self.db_path == ":memory:":
+            self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._connection.row_factory = sqlite3.Row
+
         self.init_database()
+
+    def _get_connection(self):
+        if self._connection:
+            return self._connection
+        return sqlite3.connect(self.db_path)
+
+    def _close_connection(self, conn):
+        if conn is not self._connection:
+            conn.close()
 
     def init_database(self) -> None:
         """Initialize database and create required tables."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
 
         # Create users table
@@ -88,7 +104,7 @@ class DatabaseManager:
         """)
 
         conn.commit()
-        conn.close()
+        self._close_connection(conn)
 
     def _hash_password(self, password: str) -> str:
         """
@@ -115,7 +131,7 @@ class DatabaseManager:
             bool: True if registration successful, False otherwise.
         """
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = self._get_connection()
             cursor = conn.cursor()
             password_hash = self._hash_password(password)
             cursor.execute("""
@@ -123,7 +139,7 @@ class DatabaseManager:
                 VALUES (?, ?, ?)
             """, (username, email, password_hash))
             conn.commit()
-            conn.close()
+            self._close_connection(conn)
             return True
         except sqlite3.IntegrityError:
             return False
@@ -139,14 +155,14 @@ class DatabaseManager:
         Returns:
             Optional[int]: User ID if authentication successful, None otherwise.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
         password_hash = self._hash_password(password)
         cursor.execute("""
             SELECT id FROM users WHERE username = ? AND password_hash = ?
         """, (username, password_hash))
         result = cursor.fetchone()
-        conn.close()
+        self._close_connection(conn)
         return result[0] if result else None
 
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
@@ -159,12 +175,12 @@ class DatabaseManager:
         Returns:
             Optional[Dict]: User information or None if not found.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         result = cursor.fetchone()
-        conn.close()
+        self._close_connection(conn)
         return dict(result) if result else None
 
     def save_document(self, user_id: int, filename: str, file_path: str,
@@ -182,7 +198,7 @@ class DatabaseManager:
         Returns:
             int: Document ID.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO documents (user_id, filename, file_path, file_type, file_size)
@@ -190,7 +206,7 @@ class DatabaseManager:
         """, (user_id, filename, file_path, file_type, file_size))
         conn.commit()
         doc_id = cursor.lastrowid
-        conn.close()
+        self._close_connection(conn)
         return doc_id
 
     def get_user_documents(self, user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
@@ -204,7 +220,7 @@ class DatabaseManager:
         Returns:
             List[Dict]: List of document information.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
@@ -212,7 +228,7 @@ class DatabaseManager:
             ORDER BY upload_date DESC LIMIT ?
         """, (user_id, limit))
         results = cursor.fetchall()
-        conn.close()
+        self._close_connection(conn)
         return [dict(row) for row in results]
 
     def save_analysis_result(self, document_id: int, summary: str, keywords: List[str],
@@ -234,7 +250,7 @@ class DatabaseManager:
         Returns:
             int: Analysis result ID.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO analysis_results
@@ -252,7 +268,7 @@ class DatabaseManager:
         ))
         conn.commit()
         result_id = cursor.lastrowid
-        conn.close()
+        self._close_connection(conn)
         return result_id
 
     def get_analysis_result(self, document_id: int) -> Optional[Dict[str, Any]]:
@@ -265,14 +281,14 @@ class DatabaseManager:
         Returns:
             Optional[Dict]: Analysis results or None if not found.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM analysis_results WHERE document_id = ?
         """, (document_id,))
         result = cursor.fetchone()
-        conn.close()
+        self._close_connection(conn)
 
         if result:
             result_dict = dict(result)
@@ -296,7 +312,7 @@ class DatabaseManager:
         Returns:
             int: Chat history ID.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO chat_history (document_id, user_question, ai_response)
@@ -304,7 +320,7 @@ class DatabaseManager:
         """, (document_id, question, response))
         conn.commit()
         chat_id = cursor.lastrowid
-        conn.close()
+        self._close_connection(conn)
         return chat_id
 
     def get_chat_history(self, document_id: int, limit: int = 50) -> List[Dict[str, Any]]:
@@ -318,7 +334,7 @@ class DatabaseManager:
         Returns:
             List[Dict]: List of chat messages.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
@@ -326,7 +342,7 @@ class DatabaseManager:
             ORDER BY timestamp DESC LIMIT ?
         """, (document_id, limit))
         results = cursor.fetchall()
-        conn.close()
+        self._close_connection(conn)
         return [dict(row) for row in results]
 
     def delete_document(self, document_id: int, user_id: int) -> bool:
@@ -340,7 +356,7 @@ class DatabaseManager:
         Returns:
             bool: True if deletion successful.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         cursor = conn.cursor()
         # Verify document belongs to user
         cursor.execute("""
@@ -351,9 +367,9 @@ class DatabaseManager:
         if result and result[0] == user_id:
             cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
             conn.commit()
-            conn.close()
+            self._close_connection(conn)
             return True
-        conn.close()
+        self._close_connection(conn)
         return False
 
     def search_documents(self, user_id: int, search_term: str) -> List[Dict[str, Any]]:
@@ -367,7 +383,7 @@ class DatabaseManager:
         Returns:
             List[Dict]: List of matching documents.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
@@ -376,5 +392,5 @@ class DatabaseManager:
             ORDER BY upload_date DESC
         """, (user_id, f"%{search_term}%"))
         results = cursor.fetchall()
-        conn.close()
+        self._close_connection(conn)
         return [dict(row) for row in results]

@@ -257,8 +257,10 @@ class TableExtractor:
         df_copy = df.copy()
 
         for col in df_copy.columns:
-            # Try to convert to numeric
-            df_copy[col] = pd.to_numeric(df_copy[col], errors='ignore')
+            try:
+                df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
+            except Exception:
+                continue
 
         return df_copy
 

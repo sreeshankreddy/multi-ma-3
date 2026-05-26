@@ -150,8 +150,8 @@ class TextCleaner:
         Returns:
             List[str]: List of numbers found.
         """
-        numbers = re.findall(r'\d+\.?\d*', text)
-        return numbers
+        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+        return [num.rstrip('.') for num in numbers]
 
     @staticmethod
     def extract_dates(text: str) -> List[str]:
@@ -312,5 +312,5 @@ class TextCleaner:
             "you've": "you have",
         }
 
-        pattern = re.compile(r'\b(' + '|'.join(contractions_dict.keys()) + r')\b')
-        return pattern.sub(lambda x: contractions_dict[x.group(0).lower()], text, flags=re.IGNORECASE)
+        pattern = re.compile(r'\b(' + '|'.join(re.escape(k) for k in contractions_dict.keys()) + r')\b', flags=re.IGNORECASE)
+        return pattern.sub(lambda x: contractions_dict[x.group(0).lower()], text)

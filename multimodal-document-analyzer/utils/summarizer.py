@@ -15,15 +15,15 @@ import numpy as np
 
 
 # Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
-
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
+for resource_name, download_name in [
+    ('tokenizers/punkt', 'punkt'),
+    ('tokenizers/punkt_tab', 'punkt_tab'),
+    ('corpora/stopwords', 'stopwords')
+]:
+    try:
+        nltk.data.find(resource_name)
+    except LookupError:
+        nltk.download(download_name, quiet=True)
 
 
 class DocumentSummarizer:

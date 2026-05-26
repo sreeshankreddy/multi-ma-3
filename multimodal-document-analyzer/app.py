@@ -144,9 +144,8 @@ def show_document_upload():
 
                 if success:
                     # Perform analysis
-                    import asyncio
                     analyzer = st.session_state.analyzer
-                    analyzer.analysis_results = asyncio.run(analyzer.analyze_text_async())
+                    analyzer.analysis_results = analyzer.analyze_text()
                     progress_bar.progress(90)
 
                     # Save to database
