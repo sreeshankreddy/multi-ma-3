@@ -260,7 +260,7 @@ def show_document_upload():
 
 
 def show_analysis_results():
-    """Display document analysis results with error handling."""
+    """Display document analysis results with robust error handling."""
     if st.session_state.analyzer is None or not st.session_state.analyzer.extracted_text:
         st.info("📋 Please upload and analyze a document first.")
         return
@@ -270,6 +270,11 @@ def show_analysis_results():
     try:
         analyzer = st.session_state.analyzer
         results = analyzer.analysis_results
+
+        # Check for analysis errors
+        if 'error' in results:
+            st.warning(f"⚠️ Analysis encountered an issue: {results['error']}")
+            st.info("Partial results are displayed below.")
 
         # Create tabs for different analysis views
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -283,10 +288,11 @@ def show_analysis_results():
 
         with tab1:
             st.subheader("Document Summary")
-            if 'summary' in results and results['summary']:
-                st.markdown(results['summary'])
+            summary = results.get('summary', '')
+            if summary and summary != "Summary generation failed":
+                st.markdown(summary)
             else:
-                st.info("No summary available")
+                st.info("📝 Summary not available")
 
             # Bullet points
             if 'bullet_points' in results and results['bullet_points']:

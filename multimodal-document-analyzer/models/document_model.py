@@ -7,6 +7,8 @@ import os
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 import json
+import signal
+import functools
 from utils.pdf_reader import PDFReader
 from utils.image_reader import ImageReader
 from utils.ocr_engine import OCREngine
@@ -14,6 +16,24 @@ from utils.table_extractor import TableExtractor
 from utils.text_cleaner import TextCleaner
 from utils.summarizer import DocumentSummarizer
 from utils.qa_engine import DocumentQAEngine
+
+
+def timeout(seconds=30):
+    """Timeout decorator for long-running operations."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            def handler(signum, frame):
+                raise TimeoutError(f"Operation timed out after {seconds} seconds")
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+            return result
+        return wrapper
+    return decorator
 
 
 class DocumentAnalyzer:
@@ -131,7 +151,7 @@ class DocumentAnalyzer:
 
     def analyze_text(self) -> Dict[str, Any]:
         """
-        Perform comprehensive synchronous text analysis on extracted text.
+        Perform comprehensive synchronous text analysis on extracted text with robust error handling.
 
         Returns:
             Dict: Analysis results including summary, keywords, entities, etc.
@@ -140,48 +160,96 @@ class DocumentAnalyzer:
             return {'error': 'No text to analyze'}
 
         try:
+            results = {}
+            
             # Clean text
-            cleaned_text = self.text_cleaner.clean_text(self.extracted_text)
+            try:
+                cleaned_text = self.text_cleaner.clean_text(self.extracted_text)
+            except Exception as e:
+                print(f"Text cleaning error: {e}")
+                cleaned_text = self.extracted_text[:10000]  # Fallback: use first 10k chars
 
             # Generate summary
-            summary = self.summarizer.summarize_text(cleaned_text, max_length=150, min_length=50)
+            try:
+                summary = self.summarizer.summarize_text(cleaned_text, max_length=150, min_length=50)
+                results['summary'] = summary
+            except Exception as e:
+                print(f"Summary error: {e}")
+                results['summary'] = "Summary generation failed"
 
             # Extract keywords
-            keywords = self.summarizer.extract_keywords(cleaned_text, num_keywords=15)
+            try:
+                keywords = self.summarizer.extract_keywords(cleaned_text, num_keywords=15)
+                results['keywords'] = keywords
+            except Exception as e:
+                print(f"Keywords error: {e}")
+                results['keywords'] = []
 
             # Extract entities
-            entities = self.summarizer.extract_entities(cleaned_text)
+            try:
+                entities = self.summarizer.extract_entities(cleaned_text)
+                results['entities'] = entities
+            except Exception as e:
+                print(f"Entities error: {e}")
+                results['entities'] = {}
 
             # Extract topics
-            topics = self.summarizer.extract_topics(cleaned_text, num_topics=5)
+            try:
+                topics = self.summarizer.extract_topics(cleaned_text, num_topics=5)
+                results['topics'] = topics
+            except Exception as e:
+                print(f"Topics error: {e}")
+                results['topics'] = []
 
             # Analyze sentiment
-            sentiment = self.summarizer.analyze_sentiment(cleaned_text)
+            try:
+                sentiment = self.summarizer.analyze_sentiment(cleaned_text)
+                results['sentiment'] = sentiment
+            except Exception as e:
+                print(f"Sentiment error: {e}")
+                results['sentiment'] = {"label": "NEUTRAL", "score": 0.0}
 
             # Generate bullet points
-            bullet_points = self.summarizer.generate_bullet_points(cleaned_text, num_points=5)
+            try:
+                bullet_points = self.summarizer.generate_bullet_points(cleaned_text, num_points=5)
+                results['bullet_points'] = bullet_points
+            except Exception as e:
+                print(f"Bullet points error: {e}")
+                results['bullet_points'] = []
 
             # Extract important phrases
-            phrases = self.summarizer.extract_important_phrases(cleaned_text, num_phrases=10)
+            try:
+                phrases = self.summarizer.extract_important_phrases(cleaned_text, num_phrases=10)
+                results['important_phrases'] = phrases
+            except Exception as e:
+                print(f"Important phrases error: {e}")
+                results['important_phrases'] = []
 
             # Get document statistics
-            statistics = self.summarizer.get_document_statistics(cleaned_text)
+            try:
+                statistics = self.summarizer.get_document_statistics(cleaned_text)
+                results['statistics'] = statistics
+            except Exception as e:
+                print(f"Statistics error: {e}")
+                results['statistics'] = {}
 
-            self.analysis_results = {
-                'summary': summary,
-                'keywords': keywords,
-                'entities': entities,
-                'topics': topics,
-                'sentiment': sentiment,
-                'bullet_points': bullet_points,
-                'important_phrases': phrases,
-                'statistics': statistics,
-                'analysis_timestamp': datetime.now().isoformat()
-            }
-
-            return self.analysis_results
+            results['analysis_timestamp'] = datetime.now().isoformat()
+            self.analysis_results = results
+            return results
+            
         except Exception as e:
-            return {'error': f"Error during analysis: {str(e)}"}
+            print(f"Critical analysis error: {e}")
+            return {
+                'error': f"Error during analysis: {str(e)}",
+                'summary': 'Analysis failed',
+                'keywords': [],
+                'entities': {},
+                'topics': [],
+                'sentiment': {"label": "UNKNOWN", "score": 0.0},
+                'bullet_points': [],
+                'important_phrases': [],
+                'statistics': {}
+            }
 
     async def analyze_text_async(self) -> Dict[str, Any]:
         """
