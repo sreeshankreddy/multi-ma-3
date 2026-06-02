@@ -14,7 +14,12 @@ from nltk.corpus import stopwords
 import numpy as np
 
 
-# Download required NLTK data
+# Download required NLTK data (with timeout to prevent hanging in Cloud)
+import signal
+
+def _timeout_handler(signum, frame):
+    raise TimeoutError("NLTK download timed out")
+
 for resource_name, download_name in [
     ('tokenizers/punkt', 'punkt'),
     ('tokenizers/punkt_tab', 'punkt_tab'),
@@ -24,9 +29,15 @@ for resource_name, download_name in [
         nltk.data.find(resource_name)
     except LookupError:
         try:
-            nltk.download(download_name, quiet=True)
-        except:
-            pass
+            # Set a 30-second timeout for NLTK downloads
+            signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(30)
+            try:
+                nltk.download(download_name, quiet=True)
+            finally:
+                signal.alarm(0)  # Cancel the alarm
+        except Exception as e:
+            print(f"Info: NLTK resource '{download_name}' not available: {type(e).__name__}")
 
 
 class DocumentSummarizer:

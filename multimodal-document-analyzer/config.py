@@ -16,9 +16,16 @@ UPLOADS_DIR = os.getenv('UPLOADS_DIR', os.path.join(BASE_DIR, 'uploads'))
 REPORTS_DIR = os.getenv('REPORTS_DIR', os.path.join(BASE_DIR, 'reports'))
 DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(BASE_DIR, 'analyzer.db'))
 
-# Create directories if they don't exist
-os.makedirs(UPLOADS_DIR, exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
+# Create directories if they don't exist (with error handling for Cloud environments)
+try:
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+except Exception as e:
+    print(f"Warning: Could not create uploads directory: {e}")
+
+try:
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+except Exception as e:
+    print(f"Warning: Could not create reports directory: {e}")
 
 # OCR Settings
 USE_EASYOCR = os.getenv('USE_EASYOCR', 'true').lower() == 'true'
