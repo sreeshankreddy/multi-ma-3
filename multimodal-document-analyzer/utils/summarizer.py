@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Tuple
 from collections import Counter
 import re
 import math
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import pipeline
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
@@ -23,7 +23,10 @@ for resource_name, download_name in [
     try:
         nltk.data.find(resource_name)
     except LookupError:
-        nltk.download(download_name, quiet=True)
+        try:
+            nltk.download(download_name, quiet=True)
+        except:
+            pass
 
 
 class DocumentSummarizer:
@@ -33,31 +36,32 @@ class DocumentSummarizer:
     """
 
     def __init__(self):
-        """Initialize NLP models and pipelines."""
-        try:
-            # Initialize summarization pipeline
-            self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-        except Exception as e:
-            print(f"Warning: Could not load summarization model: {e}")
-            self.summarizer = None
+        """Initialize NLP models and pipelines with proper error handling."""
+        self.summarizer = None
+        self.sentiment_analyzer = None
+        self.ner_pipeline = None
 
-        try:
-            # Initialize sentiment analysis pipeline
-            self.sentiment_analyzer = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-        except Exception as e:
-            print(f"Warning: Could not load sentiment model: {e}")
-            self.sentiment_analyzer = None
+    def _load_sentiment_analyzer(self):
+        if self.sentiment_analyzer is None:
+            try:
+                self.sentiment_analyzer = pipeline("sentiment-analysis")
+            except Exception as e:
+                print(f"Info: Sentiment model initialization deferred: {type(e).__name__}")
+                self.sentiment_analyzer = None
+        return self.sentiment_analyzer
 
-        try:
-            # Initialize NER pipeline for entity extraction
-            self.ner_pipeline = pipeline("ner", model="dslim/bert-base-uncased-ner", aggregation_strategy="simple")
-        except Exception as e:
-            print(f"Warning: Could not load NER model: {e}")
-            self.ner_pipeline = None
+    def _load_ner_pipeline(self):
+        if self.ner_pipeline is None:
+            try:
+                self.ner_pipeline = pipeline("ner", model="dbmdz/bert-base-cased-ner")
+            except Exception as e:
+                print(f"Info: NER model not available, using fallback extraction: {type(e).__name__}")
+                self.ner_pipeline = None
+        return self.ner_pipeline
 
     def summarize_text(self, text: str, max_length: int = 150, min_length: int = 50) -> str:
         """
-        Summarize text using transformer model.
+        Summarize text using extractive summarization.
 
         Args:
             text (str): Input text to summarize.
@@ -67,46 +71,14 @@ class DocumentSummarizer:
         Returns:
             str: Summarized text.
         """
-        if not self.summarizer:
-            # Fallback to extractive summarization
-            return self.extractive_summary(text, num_sentences=3)
-
         try:
-            # Split into sentences and group into chunks
-            sentences = sent_tokenize(text)
-
-            # If text is too short, return as is
-            if len(sentences) <= 2:
-                return text
-
-            # Create chunks for summarization
-            chunk_size = 1024
-            words = text.split()
-            chunks = []
-            current_chunk = []
-
-            for word in words:
-                current_chunk.append(word)
-                if len(current_chunk) >= chunk_size:
-                    chunks.append(' '.join(current_chunk))
-                    current_chunk = []
-
-            if current_chunk:
-                chunks.append(' '.join(current_chunk))
-
-            summaries = []
-            for chunk in chunks:
-                if len(chunk.split()) < 50:  # Skip very short chunks
-                    continue
-
-                summary = self.summarizer(chunk, max_length=max_length, min_length=min_length, do_sample=False)
-                summaries.append(summary[0]['summary_text'])
-
-            return ' '.join(summaries)
-
-        except Exception as e:
-            print(f"Error in transformer summarization: {e}")
+            # Use extractive summarization as primary method
             return self.extractive_summary(text, num_sentences=3)
+        except Exception as e:
+            print(f"Error in summarization: {e}")
+            # Fallback: return first few sentences
+            sentences = sent_tokenize(text)
+            return ' '.join(sentences[:min(3, len(sentences))])
 
     def extractive_summary(self, text: str, num_sentences: int = 3) -> str:
         """
@@ -184,7 +156,8 @@ class DocumentSummarizer:
         Returns:
             Dict: Dictionary mapping entity types to lists of entities.
         """
-        if not self.ner_pipeline:
+        ner_pipeline = self._load_ner_pipeline()
+        if not ner_pipeline:
             return self._extract_entities_regex(text)
 
         try:
@@ -202,7 +175,7 @@ class DocumentSummarizer:
                 if len(sentence.split()) > 512:  # Skip very long sentences
                     continue
 
-                results = self.ner_pipeline(sentence)
+                results = ner_pipeline(sentence)
 
                 for result in results:
                     entity_type = result['entity_group']
@@ -256,8 +229,9 @@ class DocumentSummarizer:
         Returns:
             Dict: Sentiment analysis results.
         """
-        if not self.sentiment_analyzer:
-            return {'label': 'UNKNOWN', 'score': 0.0}
+        sentiment_analyzer = self._load_sentiment_analyzer()
+        if not sentiment_analyzer:
+            return {'overall_sentiment': 'UNKNOWN', 'confidence': 0.0}
 
         try:
             # Split into chunks for analysis
@@ -268,7 +242,7 @@ class DocumentSummarizer:
                 if len(sentence.strip()) < 5:
                     continue
 
-                result = self.sentiment_analyzer(sentence)
+                result = sentiment_analyzer(sentence)
                 sentiments.append(result[0])
 
             # Calculate overall sentiment
