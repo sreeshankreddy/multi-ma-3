@@ -73,11 +73,26 @@ class DocumentAnalyzer:
 
             if ext == '.pdf':
                 text, pages_info = self.pdf_reader.extract_text(file_path)
+                
+                # Check if text extraction was successful
+                if not text or len(text.strip()) < 20:
+                    print(f"PDF has minimal text ({len(text)} chars). Attempting OCR...")
+                    # Try OCR on the PDF
+                    try:
+                        ocr_result = self.ocr_engine.extract_text(file_path)
+                        text = ocr_result['full_text']
+                        print(f"OCR extracted {len(text)} characters")
+                    except Exception as ocr_e:
+                        print(f"OCR failed: {ocr_e}")
+                        if not text or len(text.strip()) < 20:
+                            return False, "PDF appears to be empty or unreadable. Please ensure the PDF contains text or is a scanned document."
+                
                 self.extracted_text = text
                 self.document_metadata = {
                     'file_type': 'pdf',
                     'pages': len(pages_info),
-                    'page_info': pages_info[:3]  # Store first 3 pages info
+                    'page_info': pages_info[:3],
+                    'text_length': len(text)
                 }
                 return True, text
 
@@ -95,7 +110,7 @@ class DocumentAnalyzer:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     text = f.read()
                 self.extracted_text = text
-                self.document_metadata = {'file_type': 'txt'}
+                self.document_metadata = {'file_type': 'txt', 'text_length': len(text)}
                 return True, text
 
             elif ext == '.docx':
@@ -103,7 +118,7 @@ class DocumentAnalyzer:
                 doc = Document(file_path)
                 text = '\n'.join([para.text for para in doc.paragraphs])
                 self.extracted_text = text
-                self.document_metadata = {'file_type': 'docx'}
+                self.document_metadata = {'file_type': 'docx', 'text_length': len(text)}
                 return True, text
 
             else:

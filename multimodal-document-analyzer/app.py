@@ -199,14 +199,21 @@ def show_document_upload():
                         st.write("Analyzing content...")
                         
                         # Load document
+                        st.write("Loading and extracting text...")
                         success, text = st.session_state.analyzer.load_document(tmp_path)
                         progress_bar.progress(60)
 
                         if success:
                             # Perform analysis
                             analyzer = st.session_state.analyzer
+                            st.write(f"✅ Extracted {len(analyzer.extracted_text)} characters")
+                            st.write("Running analysis...")
                             analyzer.analysis_results = analyzer.analyze_text()
                             progress_bar.progress(90)
+
+                            # Check if analysis had errors
+                            if 'error' in analyzer.analysis_results:
+                                st.warning(f"⚠️ Analysis warning: {analyzer.analysis_results['error']}")
 
                             # Save to database
                             try:
