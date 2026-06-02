@@ -7,13 +7,17 @@ font = "sans serif"
 
 [server]
 port = 8501
-headless = false
+headless = true
 runOnSave = true
 maxUploadSize = 200
+enableXsrfProtection = true
 
 [logger]
 level = "info"
 
 [client]
 showErrorDetails = true
-toolbarMode = "developer"
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

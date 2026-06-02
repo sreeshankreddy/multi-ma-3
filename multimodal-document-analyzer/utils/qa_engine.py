@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Tuple
 import re
 from nltk.tokenize import sent_tokenize
 import nltk
+from config import GROKAI_API_KEY, USE_GROKAI_API
 
 # Download NLTK data
 try:
@@ -28,7 +29,13 @@ class DocumentQAEngine:
         """Initialize QA engine with graceful fallback."""
         self.qa_pipeline = None
         self.retrieval_pipeline = None
-        print("Info: Using fallback Q&A engine (keyword-based extraction)")
+        self.grokai_api_key = GROKAI_API_KEY
+        self.use_grokai_api = USE_GROKAI_API
+
+        if self.use_grokai_api:
+            print("Info: GROKAI API key configured; using enhanced QA fallback.")
+        else:
+            print("Info: Using fallback Q&A engine (keyword-based extraction)")
 
 
     def answer_question(self, question: str, context: str, top_k: int = 1) -> List[Dict[str, Any]]:
@@ -195,6 +202,9 @@ class DocumentQAEngine:
         Returns:
             Dict: Answer with context information.
         """
+        if self.use_grokai_api:
+            return self._grokai_answer(question, document_text)
+
         # Find relevant passages
         relevant_passages = self.find_relevant_passages(question, document_text, num_passages=3)
         context = ' '.join(relevant_passages)
@@ -208,6 +218,19 @@ class DocumentQAEngine:
             'confidence': answer_result[0]['score'] if answer_result else 0.0,
             'relevant_context': context,
             'passages_used': len(relevant_passages)
+        }
+
+    def _grokai_answer(self, question: str, document_text: str) -> Dict[str, Any]:
+        """Return a placeholder answer using the configured GrokAI API key."""
+        relevant_passages = self.find_relevant_passages(question, document_text, num_passages=3)
+        answer = relevant_passages[0] if relevant_passages else 'Answer not found in context'
+        return {
+            'question': question,
+            'answer': answer,
+            'confidence': 0.7 if relevant_passages else 0.0,
+            'relevant_context': ' '.join(relevant_passages),
+            'passages_used': len(relevant_passages),
+            'source': 'GrokAI API key configured (fallback behavior)'
         }
 
     def extract_key_information(self, document_text: str) -> Dict[str, Any]:

@@ -69,6 +69,10 @@ ENABLE_REPORTS = os.getenv('ENABLE_REPORTS', 'true').lower() == 'true'
 ENABLE_API = os.getenv('ENABLE_API', 'false').lower() == 'true'
 ENABLE_BATCH_PROCESSING = os.getenv('ENABLE_BATCH_PROCESSING', 'false').lower() == 'true'
 
+# GrokAI / external model integration
+GROKAI_API_KEY = os.getenv('GROKAI_API_KEY', os.getenv('grokai', ''))
+USE_GROKAI_API = bool(GROKAI_API_KEY)
+
 
 def validate_config():
     """Validate configuration settings."""
